@@ -695,12 +695,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         items = items.filter(item => item.status === status);
       }
 
-      if (rentable !== undefined) {
+      if (rentable !== undefined && rentable !== 'all') {
         const isRentable = rentable === 'true';
         items = items.filter(item => item.rentable === isRentable);
       }
 
-      if (expirable !== undefined) {
+      if (expirable !== undefined && expirable !== 'all') {
         const isExpirable = expirable === 'true';
         items = items.filter(item => item.expirable === isExpirable);
       }
