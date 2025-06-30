@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,10 +94,14 @@ export default function Settings() {
       if (!response.ok) return { expiresSoonThreshold: 7 };
       return response.json();
     },
-    onSuccess: (data) => {
-      setExpiresSoonThreshold(data.expiresSoonThreshold || 7);
-    },
   });
+
+  // Update local state when data is fetched
+  React.useEffect(() => {
+    if (thresholdSettings?.expiresSoonThreshold) {
+      setExpiresSoonThreshold(thresholdSettings.expiresSoonThreshold);
+    }
+  }, [thresholdSettings]);
 
   // Create category mutation
   const createCategoryMutation = useMutation({

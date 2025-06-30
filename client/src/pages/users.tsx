@@ -164,7 +164,7 @@ export default function Users() {
         const errorData = await response.json().catch(() => ({ error: "Failed to delete user" }));
         throw new Error(errorData.error || "Failed to delete user");
       }
-      return response.status === 204 ? { success: true } : response.json();
+      return { success: true };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
@@ -175,8 +175,6 @@ export default function Users() {
       });
     },
     onError: (error: Error) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-      refreshUsers();
       toast({
         title: "Error",
         description: error.message || "Failed to delete user",

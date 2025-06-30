@@ -42,7 +42,14 @@ export default function Inventory() {
 
   const deleteItemMutation = useMutation({
     mutationFn: async (itemId: number) => {
-      return await apiRequest("DELETE", `/api/items/${itemId}`);
+      const response = await fetch(`/api/items/${itemId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete item");
+      }
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/items"] });
