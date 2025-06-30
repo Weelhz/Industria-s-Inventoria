@@ -668,6 +668,17 @@ class DatabaseStorage implements IStorage {
       throw new Error("Cannot delete the last admin user");
     }
 
+    // Get first admin user to reassign transactions
+    const firstAdmin = adminUsers.find(u => u.id !== id) || adminUsers[0];
+    if (!firstAdmin) {
+      throw new Error("Cannot delete user: no admin user available to reassign transactions");
+    }
+
+    // Reassign all transactions from deleted user to first admin
+    await db.update(transactions)
+      .set({ userId: firstAdmin.id })
+      .where(eq(transactions.userId, id));
+
     const result = await db.delete(users).where(eq(users.id, id));
     return result.rowCount > 0;
   }
@@ -817,6 +828,9 @@ class DatabaseStorage implements IStorage {
   }
 
   async deleteItem(id: number): Promise<boolean> {
+    // Delete all transactions related to this item first
+    await db.delete(transactions).where(eq(transactions.itemId, id));
+    
     const result = await db.delete(items).where(eq(items.id, id));
     return result.rowCount > 0;
   }
