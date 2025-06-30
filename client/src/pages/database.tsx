@@ -20,7 +20,10 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import TopBar from "@/components/layout/top-bar";
 
 export default function DatabasePage() {
@@ -35,6 +38,14 @@ export default function DatabasePage() {
     import: false,
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [exportFilters, setExportFilters] = useState({
+    category: 'all',
+    status: 'all',
+    rentable: 'all',
+    expirable: 'all',
+    lowStock: false,
+    expired: false,
+  });
 
   // Get database stats
   const { data: stats } = useQuery({
@@ -220,6 +231,15 @@ export default function DatabasePage() {
     }
   };
 
+    const { data: categories = [] } = useQuery<Array<{ id: number; name: string }>>({
+    queryKey: ["/api/categories"],
+    queryFn: async () => {
+      const response = await fetch("/api/categories");
+      if (!response.ok) throw new Error("Failed to fetch categories");
+      return response.json();
+    },
+  });
+
   return (
     <div className="p-6 space-y-6">
       {/* Database Stats */}
@@ -255,6 +275,71 @@ export default function DatabasePage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+        {/* Export Filters */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+                <Label htmlFor="category">Category</Label>
+                <Select onValueChange={(value) => setExportFilters({...exportFilters, category: value})}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="All Categories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Categories</SelectItem>
+                        {categories.map((category) => (
+                            <SelectItem key={category.id} value={category.name}>{category.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+            <div>
+                <Label htmlFor="status">Status</Label>
+                <Select onValueChange={(value) => setExportFilters({...exportFilters, status: value})}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="All Statuses" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+            <div>
+                <Label htmlFor="rentable">Rentable</Label>
+                <Select onValueChange={(value) => setExportFilters({...exportFilters, rentable: value})}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="true">Yes</SelectItem>
+                        <SelectItem value="false">No</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+             <div>
+                <Label htmlFor="expirable">Expirable</Label>
+                <Select onValueChange={(value) => setExportFilters({...exportFilters, expirable: value})}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="All" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="true">Yes</SelectItem>
+                        <SelectItem value="false">No</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+             <div className="flex items-center space-x-2">
+                <Checkbox id="lowStock" onCheckedChange={(checked) => setExportFilters({...exportFilters, lowStock: checked || false})} />
+                <Label htmlFor="lowStock">Low Stock</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+                <Checkbox id="expired" onCheckedChange={(checked) => setExportFilters({...exportFilters, expired: checked || false})} />
+                <Label htmlFor="expired">Expired</Label>
+            </div>
+        </div>
+
           <div className="flex flex-col sm:flex-row gap-4">
             <Button
               onClick={handleExportInventory}
