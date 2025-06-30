@@ -22,12 +22,10 @@ export default function Reports() {
   const [selectedPeriod, setSelectedPeriod] = useState("7");
   const [reportType, setReportType] = useState("inventory");
 
-  // Fetch inventory data
   const { data: items = [], isLoading: itemsLoading } = useQuery<ItemWithCategory[]>({
     queryKey: ["/api/items"],
   });
 
-  // Fetch transactions
   const { data: transactions = [], isLoading: transactionsLoading } = useQuery<TransactionWithDetails[]>({
     queryKey: ["/api/transactions"],
   });
@@ -38,13 +36,11 @@ export default function Reports() {
     cutoffDate.setDate(cutoffDate.getDate() - days);
 
     if (reportType === "inventory") {
-      // Always show full inventory regardless of period
       return {
         items: items,
         transactions: []
       };
     } else {
-      // Show filtered transactions based on period
       return {
         items: [],
         transactions: selectedPeriod === "all" ? transactions : transactions.filter(transaction => {
