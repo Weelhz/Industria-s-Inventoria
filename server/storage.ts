@@ -204,7 +204,6 @@ export class MemStorage implements IStorage {
     this.currentCategoryId = 1;
     this.currentUserId = 1;
     this.currentTransactionId = 1;
-    // Don't reinitialize default data here - let the import process handle it
   }
 
   async getUser(id: number): Promise<User | undefined> {
@@ -252,12 +251,10 @@ export class MemStorage implements IStorage {
     const user = this.users.get(id);
     if (!user) return false;
 
-    // Prevent deleting admin user (first user) and ensure at least one admin exists
     if (user.username === 'admin' || id === 1) {
       throw new Error("Cannot delete the primary admin user");
     }
 
-    // Check if this is the last admin
     const adminUsers = Array.from(this.users.values()).filter(u => u.role === 'admin');
     if (user.role === 'admin' && adminUsers.length <= 1) {
       throw new Error("Cannot delete the last admin user");
@@ -353,7 +350,7 @@ export class MemStorage implements IStorage {
       location: insertItem.location || null,
       minStockLevel: insertItem.minStockLevel || 5,
       status: insertItem.status || 'active',
-      rentedCount: insertItem.rentedCount || 0,
+      rentedCount: 0,
       brokenCount: 0,
       rentable: insertItem.rentable !== undefined ? insertItem.rentable : true,
       expirable: insertItem.expirable !== undefined ? insertItem.expirable : false,
@@ -367,7 +364,7 @@ export class MemStorage implements IStorage {
     try {
       await this.logTransaction({
         itemId: newItem.id,
-        userId: null, // Will be resolved to admin user in logTransaction
+        userId: null,
         type: 'in',
         quantity: newItem.quantity,
         unitPrice: newItem.unitPrice,
@@ -396,7 +393,7 @@ export class MemStorage implements IStorage {
       try {
         await this.logTransaction({
           itemId: id,
-          userId: null, // Will be resolved to admin user in logTransaction
+          userId: null,
           type: quantityDiff > 0 ? 'in' : quantityDiff < 0 ? 'out' : 'adjustment',
           quantity: Math.abs(quantityDiff),
           unitPrice: updated.unitPrice,
@@ -413,7 +410,7 @@ export class MemStorage implements IStorage {
         try {
           await this.logTransaction({
             itemId: id,
-            userId: null, // Will be resolved to admin user in logTransaction
+            userId: null,
             type: 'adjustment',
             quantity: brokenDiff,
             unitPrice: updated.unitPrice,
@@ -590,31 +587,16 @@ export class MemStorage implements IStorage {
     console.log("Activity logs flushed");
   }
 
-  async getExpiringSoonItems(thresholdDays: number): Promise<Item[]> {
-    const currentDate = new Date();
-    const thresholdDate = new Date(currentDate.getTime() + (thresholdDays * 24 * 60 * 60 * 1000));
+  async getExpiringSoonItems(daysThreshold: number = 7): Promise<Item[]> {
+    const threshold = new Date();
+    threshold.setDate(threshold.getDate() + daysThreshold);
 
-    const expiringSoonItems = Array.from(this.items.values()).filter(item => {
-      if (!item.expirable || !item.expirationDate) return false;
-
-      try {
-        const expirationDate = new Date(item.expirationDate);
-        if (isNaN(expirationDate.getTime())) return false;
-
-        return expirationDate >= currentDate && expirationDate <= thresholdDate;
-      } catch (error) {
-        console.error("Error parsing expiration date:", error);
-        return false;
-      }
-    });
-
-    const categories = await this.getAllCategories();
-    const categoryMap = new Map(categories.map(cat => [cat.id, cat.name]));
-
-    return expiringSoonItems.map(item => ({
-      ...item,
-      categoryName: item.categoryId ? categoryMap.get(item.categoryId) : null,
-    }));
+    return Array.from(this.items.values()).filter(item => 
+      item.expirable &&
+      item.expirationDate && 
+      item.expirationDate <= threshold &&
+      item.status === "active"
+    );
   }
 
   async createDefaultUser(): Promise<void> {
@@ -647,7 +629,7 @@ class DatabaseStorage implements IStorage {
       try {
         await this.logTransaction({
           itemId: null,
-          userId: user.id, // Use the newly created user's ID
+          userId: user.id,
           type: 'user_created',
           quantity: 1,
           unitPrice: '0.00',
@@ -655,7 +637,6 @@ class DatabaseStorage implements IStorage {
         });
       } catch (logError) {
         console.warn("Failed to log user creation transaction:", logError);
-        // Don't fail user creation if logging fails
       }
 
       return user;
@@ -778,7 +759,7 @@ class DatabaseStorage implements IStorage {
     try {
       await this.logTransaction({
         itemId: newItem.id,
-        userId: null, // Will be resolved to admin user in logTransaction
+        userId: null,
         type: 'in',
         quantity: newItem.quantity,
         unitPrice: newItem.unitPrice,
@@ -803,7 +784,7 @@ class DatabaseStorage implements IStorage {
       try {
         await this.logTransaction({
           itemId: id,
-          userId: null, // Will be resolved to admin user in logTransaction
+          userId: null,
           type: quantityDiff > 0 ? 'in' : quantityDiff < 0 ? 'out' : 'adjustment',
           quantity: Math.abs(quantityDiff),
           unitPrice: updated.unitPrice,
@@ -820,7 +801,7 @@ class DatabaseStorage implements IStorage {
         try {
           await this.logTransaction({
             itemId: id,
-            userId: null, // Will be resolved to admin user in logTransaction
+            userId: null,
             type: 'adjustment',
             quantity: brokenDiff,
             unitPrice: updated.unitPrice,
@@ -954,7 +935,8 @@ class DatabaseStorage implements IStorage {
   }
 
   async getRecentTransactions(limit?: number): Promise<Transaction[]> {
-    const query = db.select().from(transactions).orderBy(desc(transactions.createdAt));    if (limit) {
+    const query = db.select().from(transactions).orderBy(desc(transactions.createdAt));
+    if (limit) {
       return await query.limit(limit);
     }
     return await query;
@@ -969,20 +951,16 @@ class DatabaseStorage implements IStorage {
   }
 
   async logTransaction(transactionData: any): Promise<Transaction> {
-    // Ensure we have a valid userId - default to admin user (id: 1) if null
     let userId = transactionData.userId;
     if (!userId) {
-      // Try to find an admin user
       const adminUsers = await db.select().from(users).where(eq(users.role, 'admin')).limit(1);
       if (adminUsers.length > 0) {
         userId = adminUsers[0].id;
       } else {
-        // If no admin, get any user
         const anyUser = await db.select().from(users).limit(1);
         if (anyUser.length > 0) {
           userId = anyUser[0].id;
         } else {
-          // If no users exist, skip logging
           console.warn("No users found, skipping transaction log");
           return null;
         }
@@ -1048,7 +1026,6 @@ class DatabaseStorage implements IStorage {
 
   async clearAllData(): Promise<void> {
     try {
-      // Delete in proper order to respect foreign key constraints
       console.log("Clearing all data...");
 
       await db.delete(transactions);
@@ -1080,7 +1057,6 @@ class DatabaseStorage implements IStorage {
 
       console.log("Creating default users and data...");
 
-      // Create default users one by one to handle duplicates gracefully
       const defaultUsers = [
         { username: "admin", fullName: "Admin User", role: "admin" as const },
         { username: "default", fullName: "Default User", role: "user" as const },
@@ -1103,7 +1079,6 @@ class DatabaseStorage implements IStorage {
         }
       }
 
-      // Create default categories if none exist
       const existingCategories = await db.select().from(categories).limit(1);
       if (existingCategories.length === 0) {
         try {
@@ -1121,11 +1096,9 @@ class DatabaseStorage implements IStorage {
         }
       }
 
-      // Create default items if none exist (but only after categories are created)
       const existingItems = await db.select().from(items).limit(1);
       if (existingItems.length === 0) {
         try {
-          // Get the actual category IDs that were created
           const allCategories = await db.select().from(categories);
           const categoryMap = new Map(allCategories.map(cat => [cat.name, cat.id]));
 
@@ -1133,7 +1106,6 @@ class DatabaseStorage implements IStorage {
           const bsaId = categoryMap.get("BSA");
           const foodId = categoryMap.get("Food");
 
-          // Only create items if the required categories exist
           if (electronicsId && bsaId && foodId) {
             await db.insert(items).values([
               {
@@ -1199,7 +1171,6 @@ class DatabaseStorage implements IStorage {
       console.log("Default data initialization completed");
     } catch (error) {
       console.error("Error in createDefaultUser:", error);
-      // Don't throw error - we want the system to continue working even if default data creation fails
     }
   }
 }

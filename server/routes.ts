@@ -71,12 +71,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/categories/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      
+      // Check if any items are using this category
+      const itemsWithCategory = await storage.getItemsByCategoryId(id);
+      if (itemsWithCategory.length > 0) {
+        return res.status(400).json({ 
+          error: "Cannot delete category", 
+          message: `Category is being used by ${itemsWithCategory.length} item(s). Please reassign or delete those items first.`
+        });
+      }
+      
       const deleted = await storage.deleteCategory(id);
       if (!deleted) {
         return res.status(404).json({ error: "Category not found" });
       }
       res.status(204).send();
     } catch (error) {
+      console.error("Error deleting category:", error);
       res.status(500).json({ error: "Failed to delete category" });
     }
   });
@@ -425,6 +436,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
       
+      // Check if this is the last admin user
+      const allUsers = await storage.getAllUsers();
+      const adminUsers = allUsers.filter(u => u.role === 'admin');
+      if (userToDelete.role === 'admin' && adminUsers.length === 1) {
+        return res.status(400).json({ error: "Cannot delete the last admin user" });
+      }
+      
       const deleted = await storage.deleteUser(id);
       if (!deleted) {
         return res.status(404).json({ error: "User not found" });
@@ -433,16 +451,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Log user deletion activity
       try {
         // Get first admin user for system operations
-        const adminUsers = await storage.getAllUsers();
-        const adminUser = adminUsers.find(u => u.role === 'admin');
+        const remainingAdminUsers = await storage.getAllUsers();
+        const adminUser = remainingAdminUsers.find(u => u.role === 'admin');
         
-        await storage.createTransaction({
-          type: "adjustment",
-          quantity: 1,
-          userId: adminUser?.id || 26, // Use admin user ID
-          itemId: null,
-          notes: `User deleted: ${userToDelete.fullName} (${userToDelete.username})`
-        });
+        if (adminUser) {
+          await storage.createTransaction({
+            type: "adjustment",
+            quantity: 1,
+            userId: adminUser.id,
+            itemId: null,
+            notes: `User deleted: ${userToDelete.fullName} (${userToDelete.username})`
+          });
+        }
       } catch (logError) {
         console.error("Failed to log user deletion:", logError);
       }
@@ -648,36 +668,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/database/export/inventory", async (req, res) => {
     try {
       const XLSX = await import('xlsx');
-      const items = await storage.getAllItems();
+      const { 
+        category, 
+        status, 
+        rentable, 
+        expirable, 
+        lowStock,
+        expired 
+      } = req.query;
+      
+      let items = await storage.getAllItems();
       const categories = await storage.getAllCategories();
       const categoryMap = new Map(categories.map(cat => [cat.id, cat.name]));
+
+      // Apply filters
+      if (category && category !== 'all') {
+        if (category === 'uncategorized') {
+          items = items.filter(item => !item.categoryId);
+        } else {
+          const categoryId = parseInt(category as string);
+          items = items.filter(item => item.categoryId === categoryId);
+        }
+      }
+
+      if (status && status !== 'all') {
+        items = items.filter(item => item.status === status);
+      }
+
+      if (rentable !== undefined) {
+        const isRentable = rentable === 'true';
+        items = items.filter(item => item.rentable === isRentable);
+      }
+
+      if (expirable !== undefined) {
+        const isExpirable = expirable === 'true';
+        items = items.filter(item => item.expirable === isExpirable);
+      }
+
+      if (lowStock === 'true') {
+        items = items.filter(item => {
+          const minStock = item.minStockLevel || 5;
+          return item.quantity < minStock;
+        });
+      }
+
+      if (expired === 'true') {
+        const now = new Date();
+        items = items.filter(item => 
+          item.expirable && 
+          item.expirationDate && 
+          item.expirationDate <= now
+        );
+      }
 
       const exportData = items.map(item => ({
         'Item ID': item.id,
         'Name': item.name,
         'SKU': item.sku,
         'Description': item.description || '',
-        'Category': item.categoryId ? categoryMap.get(item.categoryId) : '',
+        'Category': item.categoryId ? categoryMap.get(item.categoryId) : 'Uncategorized',
         'Quantity': item.quantity,
         'Unit Price': item.unitPrice,
+        'Total Value': (item.quantity * parseFloat(item.unitPrice)).toFixed(2),
         'Location': item.location || '',
-        'Min Stock Level': item.minStockLevel || '',
-        'Status': item.status,
+        'Min Stock Level': item.minStockLevel || 5,
+        'Status': item.status || 'active',
+        'Rentable': item.rentable ? 'Yes' : 'No',
+        'Expirable': item.expirable ? 'Yes' : 'No',
         'Rented Count': item.rentedCount || 0,
         'Broken Count': item.brokenCount || 0,
+        'Available Count': (item.quantity - (item.rentedCount || 0)),
         'Expiration Date': item.expirationDate ? item.expirationDate.toISOString().split('T')[0] : '',
+        'Days Until Expiry': item.expirationDate ? Math.ceil((item.expirationDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : '',
+        'Is Low Stock': (item.quantity < (item.minStockLevel || 5)) ? 'Yes' : 'No',
+        'Is Expired': (item.expirable && item.expirationDate && item.expirationDate <= new Date()) ? 'Yes' : 'No',
         'Created At': item.createdAt.toISOString(),
         'Updated At': item.updatedAt.toISOString()
       }));
 
       const ws = XLSX.utils.json_to_sheet(exportData);
+      
+      // Auto-size columns
+      const colWidths = [];
+      const headers = Object.keys(exportData[0] || {});
+      headers.forEach((header, i) => {
+        const maxLength = Math.max(
+          header.length,
+          ...exportData.map(row => String(row[header] || '').length)
+        );
+        colWidths[i] = { wch: Math.min(maxLength + 2, 50) };
+      });
+      ws['!cols'] = colWidths;
+
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
 
       const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
+      // Generate filename with applied filters
+      const filterParts = [];
+      if (category && category !== 'all') filterParts.push(`category-${category}`);
+      if (status && status !== 'all') filterParts.push(`status-${status}`);
+      if (rentable !== undefined) filterParts.push(`rentable-${rentable}`);
+      if (expirable !== undefined) filterParts.push(`expirable-${expirable}`);
+      if (lowStock === 'true') filterParts.push('low-stock');
+      if (expired === 'true') filterParts.push('expired');
+      
+      const filterSuffix = filterParts.length > 0 ? `_${filterParts.join('_')}` : '';
+      const filename = `inventory_export${filterSuffix}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', 'attachment; filename="inventory_export.xlsx"');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.send(buffer);
     } catch (error) {
       console.error('Error exporting inventory:', error);
@@ -688,31 +789,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/database/export/activity", async (req, res) => {
     try {
       const XLSX = await import('xlsx');
-      const transactions = await storage.getAllTransactions();
+      const { 
+        type, 
+        userId, 
+        itemId, 
+        dateFrom, 
+        dateTo,
+        days 
+      } = req.query;
+      
+      let transactions = await storage.getAllTransactions();
       const items = await storage.getAllItems();
       const users = await storage.getAllUsers();
 
       const itemMap = new Map(items.map(item => [item.id, item.name]));
       const userMap = new Map(users.map(user => [user.id, user.fullName]));
 
+      // Apply filters
+      if (type && type !== 'all') {
+        transactions = transactions.filter(transaction => transaction.type === type);
+      }
+
+      if (userId && userId !== 'all') {
+        const userIdNum = parseInt(userId as string);
+        transactions = transactions.filter(transaction => transaction.userId === userIdNum);
+      }
+
+      if (itemId && itemId !== 'all') {
+        const itemIdNum = parseInt(itemId as string);
+        transactions = transactions.filter(transaction => transaction.itemId === itemIdNum);
+      }
+
+      // Date filtering
+      if (days) {
+        const daysNum = parseInt(days as string);
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - daysNum);
+        transactions = transactions.filter(transaction => 
+          new Date(transaction.createdAt) >= cutoffDate
+        );
+      } else {
+        if (dateFrom) {
+          const fromDate = new Date(dateFrom as string);
+          transactions = transactions.filter(transaction => 
+            new Date(transaction.createdAt) >= fromDate
+          );
+        }
+
+        if (dateTo) {
+          const toDate = new Date(dateTo as string);
+          toDate.setHours(23, 59, 59, 999); // Include the entire day
+          transactions = transactions.filter(transaction => 
+            new Date(transaction.createdAt) <= toDate
+          );
+        }
+      }
+
       const exportData = transactions.map(transaction => ({
         'Transaction ID': transaction.id,
-        'Item Name': transaction.itemId ? itemMap.get(transaction.itemId) : 'Unknown',
-        'Type': transaction.type,
+        'Date': new Date(transaction.createdAt).toLocaleDateString(),
+        'Time': new Date(transaction.createdAt).toLocaleTimeString(),
+        'Type': transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1),
+        'Item Name': transaction.itemId ? itemMap.get(transaction.itemId) : 'System/Unknown',
+        'Item ID': transaction.itemId || '',
         'Quantity': transaction.quantity,
-        'User': transaction.userId ? userMap.get(transaction.userId) : 'Unknown',
+        'Unit Price': transaction.unitPrice || '0.00',
+        'Total Value': ((transaction.quantity || 0) * parseFloat(transaction.unitPrice || '0')).toFixed(2),
+        'User': transaction.userId ? userMap.get(transaction.userId) : 'System',
+        'User ID': transaction.userId || '',
         'Notes': transaction.notes || '',
         'Created At': transaction.createdAt.toISOString()
       }));
 
       const ws = XLSX.utils.json_to_sheet(exportData);
+      
+      // Auto-size columns
+      const colWidths = [];
+      const headers = Object.keys(exportData[0] || {});
+      headers.forEach((header, i) => {
+        const maxLength = Math.max(
+          header.length,
+          ...exportData.map(row => String(row[header] || '').length)
+        );
+        colWidths[i] = { wch: Math.min(maxLength + 2, 30) };
+      });
+      ws['!cols'] = colWidths;
+
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Activity');
 
       const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
+      // Generate filename with applied filters
+      const filterParts = [];
+      if (type && type !== 'all') filterParts.push(`type-${type}`);
+      if (userId && userId !== 'all') filterParts.push(`user-${userId}`);
+      if (itemId && itemId !== 'all') filterParts.push(`item-${itemId}`);
+      if (days) filterParts.push(`${days}days`);
+      if (dateFrom) filterParts.push(`from-${dateFrom}`);
+      if (dateTo) filterParts.push(`to-${dateTo}`);
+      
+      const filterSuffix = filterParts.length > 0 ? `_${filterParts.join('_')}` : '';
+      const filename = `activity_export${filterSuffix}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', 'attachment; filename="activity_export.xlsx"');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.send(buffer);
     } catch (error) {
       console.error('Error exporting activity:', error);
