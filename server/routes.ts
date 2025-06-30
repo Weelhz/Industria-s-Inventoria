@@ -686,8 +686,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (category === 'uncategorized') {
           items = items.filter(item => !item.categoryId);
         } else {
-          const categoryId = parseInt(category as string);
-          items = items.filter(item => item.categoryId === categoryId);
+          const categoryObj = categories.find(cat => cat.name === category);
+          if (categoryObj) {
+            items = items.filter(item => item.categoryId === categoryObj.id);
+          }
         }
       }
 
