@@ -69,7 +69,6 @@ export default function Users() {
   const queryClient = useQueryClient();
   const { currentUser, refreshUsers } = useUser();
 
-  // Fetch users
   const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
     queryFn: async () => {
@@ -81,11 +80,9 @@ export default function Users() {
     },
   });
 
-  // Get current user from context
   const { currentUser: contextCurrentUser } = useUser();
   const isAdmin = contextCurrentUser?.role === "admin";
 
-  // Add user mutation
   const addUserMutation = useMutation({
     mutationFn: async (userData: UserFormData) => {
       const response = await fetch("/api/users", {
@@ -119,7 +116,6 @@ export default function Users() {
     },
   });
 
-  // Edit user mutation
   const editUserMutation = useMutation({
     mutationFn: async ({ id, userData }: { id: number; userData: UserFormData }) => {
       const response = await fetch(`/api/users/${id}`, {
@@ -154,7 +150,6 @@ export default function Users() {
     },
   });
 
-  // Delete user mutation
   const deleteUserMutation = useMutation({
     mutationFn: async (id: number) => {
       const response = await fetch(`/api/users/${id}`, {
