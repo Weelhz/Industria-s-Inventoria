@@ -15,7 +15,6 @@ await client.connect();
 
 export const db = drizzle({ client, schema });
 
-// Initialize admin user
 async function initializeAdminUser() {
   try {
     const adminUser = await db.select().from(schema.users).where(eq(schema.users.username, 'admin')).limit(1);
@@ -34,5 +33,4 @@ async function initializeAdminUser() {
   }
 }
 
-// Call initialization
 initializeAdminUser();
