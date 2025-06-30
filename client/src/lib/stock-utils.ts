@@ -19,7 +19,6 @@ export function calculateStockStatus(item: Item): StockStatus {
   const availableStock = item.quantity;
   const percentage = Math.min(100, (availableStock / minStock) * 100);
   
-  // Critical: Out of stock
   if (availableStock === 0) {
     return {
       level: 'critical',
@@ -29,8 +28,7 @@ export function calculateStockStatus(item: Item): StockStatus {
       percentage: 0
     };
   }
-  
-  // Urgent: Very low stock (0-30% of minimum)
+
   if (availableStock <= minStock * 0.3) {
     return {
       level: 'urgent',
@@ -40,8 +38,7 @@ export function calculateStockStatus(item: Item): StockStatus {
       percentage
     };
   }
-  
-  // Warning: Low stock (30-100% of minimum)
+
   if (availableStock < minStock) {
     return {
       level: 'warning',
@@ -51,8 +48,7 @@ export function calculateStockStatus(item: Item): StockStatus {
       percentage
     };
   }
-  
-  // Low: Just above minimum (100-150% of minimum)
+
   if (availableStock <= minStock * 1.5) {
     return {
       level: 'low',
@@ -62,8 +58,7 @@ export function calculateStockStatus(item: Item): StockStatus {
       percentage
     };
   }
-  
-  // Saturated: Excessive stock (above 3x minimum)
+
   if (availableStock > minStock * 3) {
     return {
       level: 'saturated',
@@ -73,8 +68,7 @@ export function calculateStockStatus(item: Item): StockStatus {
       percentage
     };
   }
-  
-  // Good: Normal stock levels
+
   return {
     level: 'good',
     label: 'Good',
