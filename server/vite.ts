@@ -51,7 +51,6 @@ export async function setupVite(app: Express, server: Server) {
         "index.html",
       );
 
-      // always reload the index.html file from disk incase it changes
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
       template = template.replace(
         `src="/src/main.tsx"`,
@@ -71,7 +70,6 @@ export function serveStatic(app: Express) {
   const publicPath = path.resolve(distPath, "public");
   const indexPath = path.resolve(publicPath, "index.html");
 
-  // Check if the build output exists
   if (!fs.existsSync(publicPath)) {
     throw new Error(
       `Could not find the build directory: ${publicPath}. Ensure that the build script has been run.`
@@ -84,12 +82,10 @@ export function serveStatic(app: Express) {
     );
   }
 
-  // Serve static files from the dist/public directory
   app.use(express.static(publicPath, {
-    index: false, // Don't automatically serve index.html for directories
+    index: false,
   }));
 
-  // Serve the index.html file for all non-API routes
   app.get("*", (_req, res, next) => {
     try {
       res.sendFile(indexPath, (err) => {
