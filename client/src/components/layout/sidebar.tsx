@@ -27,7 +27,6 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
     { icon: Database, label: "Database", path: "/database" },
   ];
 
-  // Filter menu items based on user role
   const menuItems = allMenuItems.filter((item) => {
     if (currentUser?.role === "user") {
       return ["/dashboard", "/inventory", "/activity"].includes(item.path);
@@ -35,7 +34,7 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
     if (currentUser?.role === "overseer") {
       return ["/activity"].includes(item.path);
     }
-    return true; // Admin sees all
+    return true;
   });
 
   const handleEasterEgg = () => {
@@ -44,7 +43,7 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
     
     if (newClickCount === 4) {
       toast({
-        title: "🎉 What do you seek?",
+        title: "Here is the answer...",
         description: (
           <a 
             href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" 
@@ -60,7 +59,7 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
       setEasterEggClicks(0);
     } else if (newClickCount === 2) {
       toast({
-        title: "🤔 Curious...",
+        title: "Curious...",
         description: "What do you seek?",
         duration: 3000,
       });
@@ -81,7 +80,7 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
         </div>
       </div>
 
-      {/* Collapse Button (Easter Egg) */}
+      {/* Collapse Button */}
       <div className="px-4 pb-2">
         <button
           onClick={() => {
