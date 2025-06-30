@@ -1,14 +1,10 @@
-
 #!/bin/bash
 
-# Application Setup Script
 echo "Setting up Inventoria application..."
 
-# Install dependencies
 echo "Installing npm dependencies..."
 cd .. && npm install && cd ubuntu-setup
 
-# Create environment file in parent directory
 if [ ! -f "../.env" ]; then
     echo "Creating .env file..."
     cat > ../.env << EOL
@@ -23,11 +19,9 @@ else
     echo ".env file already exists"
 fi
 
-# Setup database schema
 echo "Setting up database schema..."
 cd .. && npm run db:push && cd ubuntu-setup
 
-# Build the application
 echo "Building application..."
 cd .. && npm run build && cd ubuntu-setup
 
