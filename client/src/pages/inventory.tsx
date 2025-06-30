@@ -229,6 +229,40 @@ export default function Inventory() {
     day: '2-digit',
   });
 
+  const handleDeleteCategory = async (categoryId: number) => {
+      try {
+        const response = await apiRequest(
+          `/api/categories/${categoryId}`,
+          "DELETE"
+        );
+
+        let result;
+        try {
+          const responseText = await response.text();
+          if (responseText) {
+            result = JSON.parse(responseText);
+          }
+        } catch (parseError) {
+          // If response is empty (204) or not JSON, that's fine for successful deletion
+          result = { success: true };
+        }
+
+        toast({
+          title: "Success",
+          description: "Category deleted successfully",
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/items"] });
+      } catch (error: any) {
+        const errorMessage = error.response?.data?.message || error.message || "Failed to delete category";
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+    };
+
   return (
     <div className="p-6 space-y-6">
       <div className="max-w-7xl mx-auto">
@@ -251,6 +285,7 @@ export default function Inventory() {
             onSearch={handleSearch}
             isLoading={itemsLoading}
             showAllColumns={true}
+            onDeleteCategory={handleDeleteCategory}
           />
         </div>
       </div>
