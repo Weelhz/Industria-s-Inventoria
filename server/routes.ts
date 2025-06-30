@@ -72,7 +72,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       
-      // Check if any items are using this category
       const itemsWithCategory = await storage.getItemsByCategoryId(id);
       if (itemsWithCategory.length > 0) {
         return res.status(400).json({ 
@@ -278,12 +277,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Item not found" });
       }
 
-      // Log rent activity
       try {
         await storage.createTransaction({
           type: "out",
           quantity: quantity,
-          userId: userId || 26, // Use existing admin user ID
+          userId: userId || 26,
           itemId: id,
           notes: `Rented ${quantity} units of ${item.name}`
         });
@@ -313,12 +311,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Item not found" });
       }
 
-      // Log return activity
       try {
         await storage.createTransaction({
           type: "in",
           quantity: quantity,
-          userId: userId || 26, // Use existing admin user ID
+          userId: userId || 26,
           itemId: id,
           notes: `Returned ${quantity} units of ${item.name}`
         });
@@ -375,16 +372,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const user = await storage.createUser({ username, fullName, role });
       
-      // Log user creation activity
       try {
-        // Get first admin user for system operations
         const adminUsers = await storage.getAllUsers();
         const adminUser = adminUsers.find(u => u.role === 'admin');
         
         await storage.createTransaction({
           type: "adjustment",
           quantity: 1,
-          userId: adminUser?.id || 26, // Use admin user ID
+          userId: adminUser?.id || 26,
           itemId: null,
           notes: `User created: ${fullName} (${username}) with role ${role}`
         });
@@ -396,7 +391,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("User creation error:", error);
 
-      // Handle duplicate username error
       if (error.code === '23505' && error.constraint === 'users_username_unique') {
         return res.status(409).json({ error: "Username already exists" });
       }
@@ -430,13 +424,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       
-      // Get user info before deletion for logging
       const userToDelete = await storage.getUser(id);
       if (!userToDelete) {
         return res.status(404).json({ error: "User not found" });
       }
       
-      // Check if this is the last admin user
       const allUsers = await storage.getAllUsers();
       const adminUsers = allUsers.filter(u => u.role === 'admin');
       if (userToDelete.role === 'admin' && adminUsers.length === 1) {
@@ -448,9 +440,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
       
-      // Log user deletion activity
       try {
-        // Get first admin user for system operations
         const remainingAdminUsers = await storage.getAllUsers();
         const adminUser = remainingAdminUsers.find(u => u.role === 'admin');
         
@@ -498,7 +488,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       let backupData;
 
-      // Parse backup data
       if (req.file) {
         try {
           backupData = JSON.parse(req.file.buffer.toString());
@@ -509,17 +498,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         backupData = req.body;
       }
 
-      // Extract data arrays with fallbacks
       const items = backupData.items || (backupData.data && backupData.data.items) || [];
       const categories = backupData.categories || (backupData.data && backupData.data.categories) || [];
       const users = backupData.users || (backupData.data && backupData.data.users) || [];
 
-      // Validate data format
       if (!Array.isArray(items) || !Array.isArray(categories) || !Array.isArray(users)) {
         return res.status(400).json({ error: "Invalid backup data format - expected arrays for items, categories, and users" });
       }
 
-      // Validate minimum required data
       if (categories.length === 0 && items.length > 0) {
         return res.status(400).json({ error: "Cannot import items without categories" });
       }
@@ -528,7 +514,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Backup must contain at least one user" });
       }
 
-      // Validate required fields for each data type
       for (const category of categories) {
         if (!category.name) {
           return res.status(400).json({ error: "All categories must have a name" });
@@ -549,10 +534,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`Starting backup import: ${categories.length} categories, ${users.length} users, ${items.length} items`);
 
-      // Clear existing data only after validation passes
       await storage.clearAllData();
 
-      // Import categories first (needed for items)
       const categoryIdMap = new Map();
       for (const category of categories) {
         try {
@@ -570,7 +553,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Import users
       const userIdMap = new Map();
       for (const user of users) {
         try {
@@ -586,7 +568,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } catch (error) {
           console.error(`Failed to create user ${user.username}:`, error);
-          // Don't fail the entire import for duplicate usernames
           if (error.code === '23505' && error.constraint === 'users_username_unique') {
             console.log(`User ${user.username} already exists, skipping...`);
             continue;
@@ -595,7 +576,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Import items with updated category IDs
       for (const item of items) {
         try {
           const itemData = {
@@ -616,7 +596,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             expirable: item.expirable !== undefined ? item.expirable : false,
             expirationDate: item.expirationDate ? (() => {
               try {
-                // Handle various date formats
                 if (typeof item.expirationDate === 'string') {
                   return new Date(item.expirationDate);
                 } else if (item.expirationDate && typeof item.expirationDate === 'object') {
@@ -636,7 +615,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Ensure at least one admin user exists
       await storage.createDefaultUser();
 
       console.log("Backup import completed successfully");
@@ -651,7 +629,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Backup import failed:", error);
       
-      // If import fails, ensure we have default data
       try {
         await storage.createDefaultUser();
       } catch (defaultError) {
@@ -681,7 +658,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const categories = await storage.getAllCategories();
       const categoryMap = new Map(categories.map(cat => [cat.id, cat.name]));
 
-      // Apply filters
       if (category && category !== 'all') {
         if (category === 'uncategorized') {
           items = items.filter(item => !item.categoryId);
@@ -750,7 +726,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const ws = XLSX.utils.json_to_sheet(exportData);
       
-      // Auto-size columns
       const colWidths = [];
       const headers = Object.keys(exportData[0] || {});
       headers.forEach((header, i) => {
@@ -767,7 +742,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-      // Generate filename with applied filters
       const filterParts = [];
       if (category && category !== 'all') filterParts.push(`category-${category}`);
       if (status && status !== 'all') filterParts.push(`status-${status}`);
@@ -807,7 +781,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const itemMap = new Map(items.map(item => [item.id, item.name]));
       const userMap = new Map(users.map(user => [user.id, user.fullName]));
 
-      // Apply filters
       if (type && type !== 'all') {
         transactions = transactions.filter(transaction => transaction.type === type);
       }
@@ -822,7 +795,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         transactions = transactions.filter(transaction => transaction.itemId === itemIdNum);
       }
 
-      // Date filtering
       if (days) {
         const daysNum = parseInt(days as string);
         const cutoffDate = new Date();
@@ -840,7 +812,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (dateTo) {
           const toDate = new Date(dateTo as string);
-          toDate.setHours(23, 59, 59, 999); // Include the entire day
+          toDate.setHours(23, 59, 59, 999);
           transactions = transactions.filter(transaction => 
             new Date(transaction.createdAt) <= toDate
           );
@@ -865,7 +837,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const ws = XLSX.utils.json_to_sheet(exportData);
       
-      // Auto-size columns
       const colWidths = [];
       const headers = Object.keys(exportData[0] || {});
       headers.forEach((header, i) => {
@@ -882,7 +853,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-      // Generate filename with applied filters
       const filterParts = [];
       if (type && type !== 'all') filterParts.push(`type-${type}`);
       if (userId && userId !== 'all') filterParts.push(`user-${userId}`);
@@ -912,7 +882,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get dashboard stats
   app.get("/api/dashboard/stats", async (req, res) => {
     try {
       const [totalItems, totalValue, lowStockCount, todayTransactions] = await Promise.all([
@@ -934,10 +903,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get expires soon threshold setting
   app.get("/api/settings/expires-threshold", async (req, res) => {
     try {
-      // For now, store in memory. In production, you'd store this in database
       const threshold = global.expiresSoonThreshold || 7;
       res.json({ expiresSoonThreshold: threshold });
     } catch (error) {
