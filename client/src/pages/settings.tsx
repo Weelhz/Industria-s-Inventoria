@@ -72,7 +72,6 @@ export default function Settings() {
   const { currentUser } = useUser();
   const isAdmin = currentUser?.role === 'admin';
 
-  // Fetch categories
   const { data: categoryList = [], isLoading: categoriesLoading, error: categoriesError } = useQuery<Category[]>({
     queryKey: ['/api/categories'],
     queryFn: async () => {
@@ -82,11 +81,10 @@ export default function Settings() {
       }
       return response.json();
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: true,
   });
 
-  // Fetch expires soon threshold
   const { data: thresholdSettings } = useQuery({
     queryKey: ["/api/settings/expires-threshold"],
     queryFn: async () => {
@@ -96,14 +94,12 @@ export default function Settings() {
     },
   });
 
-  // Update local state when data is fetched
   React.useEffect(() => {
     if (thresholdSettings?.expiresSoonThreshold) {
       setExpiresSoonThreshold(thresholdSettings.expiresSoonThreshold);
     }
   }, [thresholdSettings]);
 
-  // Create category mutation
   const createCategoryMutation = useMutation({
     mutationFn: async (data: { name: string; description?: string }) => {
       return await apiRequest("POST", "/api/categories", data);
@@ -126,7 +122,6 @@ export default function Settings() {
     },
   });
 
-  // Delete category mutation
   const deleteCategoryMutation = useMutation({
     mutationFn: async (categoryId: number) => {
       return await apiRequest("DELETE", `/api/categories/${categoryId}`);
@@ -158,7 +153,6 @@ export default function Settings() {
     });
   };
 
-  // Add category mutation
   const addCategoryMutation = useMutation({
     mutationFn: async (data: { name: string; description?: string }) => {
       return await apiRequest("POST", "/api/categories", data);
@@ -181,7 +175,6 @@ export default function Settings() {
     },
   });
 
-  // Edit category mutation
   const editCategoryMutation = useMutation({
     mutationFn: async ({ id, categoryData }: { id: number; categoryData: CategoryFormData }) => {
       return await apiRequest("PUT", `/api/categories/${id}`, categoryData);
@@ -204,7 +197,6 @@ export default function Settings() {
     },
   });
 
-  // Update expires soon threshold mutation
   const updateThresholdMutation = useMutation({
     mutationFn: async (threshold: number) => {
       return await apiRequest("PUT", "/api/settings/expires-threshold", { expiresSoonThreshold: threshold });
