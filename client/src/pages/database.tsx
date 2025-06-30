@@ -172,22 +172,46 @@ export default function DatabasePage() {
   const handleExportInventory = async () => {
     setIsExporting((prev) => ({ ...prev, inventory: true }));
     try {
-      const response = await fetch("/api/database/export/inventory");
+      const params = new URLSearchParams();
+      
+      if (exportFilters.category !== 'all') {
+        params.append('category', exportFilters.category);
+      }
+      if (exportFilters.status !== 'all') {
+        params.append('status', exportFilters.status);
+      }
+      if (exportFilters.rentable !== 'all') {
+        params.append('rentable', exportFilters.rentable);
+      }
+      if (exportFilters.expirable !== 'all') {
+        params.append('expirable', exportFilters.expirable);
+      }
+      if (exportFilters.lowStock) {
+        params.append('lowStock', 'true');
+      }
+      if (exportFilters.expired) {
+        params.append('expired', 'true');
+      }
+
+      const queryString = params.toString();
+      const url = `/api/database/export/inventory${queryString ? '?' + queryString : ''}`;
+      
+      const response = await fetch(url);
       if (!response.ok) throw new Error("Failed to export inventory");
 
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
+      a.href = downloadUrl;
       a.download = "inventory_export.xlsx";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(downloadUrl);
 
       toast({
         title: "Success",
-        description: "Inventory data exported successfully",
+        description: "Inventory data exported successfully with applied filters",
       });
     } catch (error) {
       toast({
