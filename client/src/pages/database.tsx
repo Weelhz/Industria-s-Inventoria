@@ -303,7 +303,7 @@ export default function DatabasePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
                 <Label htmlFor="category">Category</Label>
-                <Select onValueChange={(value) => setExportFilters({...exportFilters, category: value})}>
+                <Select value={exportFilters.category} onValueChange={(value) => setExportFilters({...exportFilters, category: value})}>
                     <SelectTrigger>
                         <SelectValue placeholder="All Categories" />
                     </SelectTrigger>
