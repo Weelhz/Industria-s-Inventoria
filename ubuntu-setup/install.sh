@@ -1,28 +1,20 @@
-
 #!/bin/bash
 
-# Inventoria Ubuntu Setup Script
 echo "Setting up Inventoria Inventory Management System on Ubuntu..."
 
-# Update system packages
 sudo apt update && sudo apt upgrade -y
 
-# Install Node.js 20.x
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
-# Install PostgreSQL
 sudo apt install -y postgresql postgresql-contrib
 
-# Install Git if not already installed
 sudo apt install -y git
 
-# Verify installations
 echo "Node.js version: $(node --version)"
 echo "npm version: $(npm --version)"
 echo "PostgreSQL version: $(psql --version)"
 
-# Setup PostgreSQL database and user with proper permissions
 echo "Setting up PostgreSQL database..."
 sudo -u postgres createuser --createdb inventoria || echo "User already exists"
 sudo -u postgres createdb inventoria_db || echo "Database already exists"
