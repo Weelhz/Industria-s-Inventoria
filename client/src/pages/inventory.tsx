@@ -243,7 +243,6 @@ export default function Inventory() {
             result = JSON.parse(responseText);
           }
         } catch (parseError) {
-          // If response is empty (204) or not JSON, that's fine for successful deletion
           result = { success: true };
         }
 
