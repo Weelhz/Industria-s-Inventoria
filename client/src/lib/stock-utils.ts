@@ -1,4 +1,3 @@
-
 export interface StockStatus {
   level: 'critical' | 'urgent' | 'warning' | 'low' | 'good' | 'saturated';
   label: string;
