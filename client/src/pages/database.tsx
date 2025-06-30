@@ -47,7 +47,6 @@ export default function DatabasePage() {
     expired: false,
   });
 
-  // Get database stats
   const { data: stats } = useQuery({
     queryKey: ["/api/dashboard/stats"],
     queryFn: async () => {
@@ -57,7 +56,6 @@ export default function DatabasePage() {
     },
   });
 
-  // Flush activity logs mutation
   const flushActivityMutation = useMutation({
     mutationFn: async () => {
       const response = await fetch("/api/database/flush-activity", {
@@ -82,7 +80,6 @@ export default function DatabasePage() {
     },
   });
 
-  // Export complete backup
   const handleExportBackup = async () => {
     setIsBackupProcessing((prev) => ({ ...prev, export: true }));
     try {
@@ -116,7 +113,6 @@ export default function DatabasePage() {
     }
   };
 
-  // Import complete backup
   const handleImportBackup = async (file: File) => {
     setIsBackupProcessing((prev) => ({ ...prev, import: true }));
     try {
